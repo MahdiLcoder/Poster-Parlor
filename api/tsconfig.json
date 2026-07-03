@@ -1,0 +1,46 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compileOnSave": false,
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/api-e2e"
+    },
+    {
+      "path": "./apps/api"
+    },
+    {
+      "path": "./libs/auth"
+    },
+    {
+      "path": "./libs/database"
+    },
+    {
+      "path": "./libs/inventory"
+    },
+    {
+      "path": "./libs/orders"
+    },
+    {
+      "path": "./libs/utils"
+    },
+    {
+      "path": "./libs/admin"
+    },
+    {
+      "path": "./libs/logger"
+    },
+    {
+      "path": "./libs/config"
+    },
+    {
+      "path": "./libs/shared"
+    },
+    {
+      "path": "./libs/models"
+    },
+    {
+      "path": "./libs/review"
+    }
+  ]
+}
