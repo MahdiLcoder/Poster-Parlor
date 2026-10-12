@@ -1,0 +1,113 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # --------------------------------------------------------------------------
+  # 1. API Verification: Lint, Typecheck, Build
+  # --------------------------------------------------------------------------
+  backend-ci:
+    name: Backend CI (NestJS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Lint Backend
+        run: npm run lint
+
+      - name: Build Backend (Nx)
+        run: npm run build
+
+  # --------------------------------------------------------------------------
+  # 2. Web Verification: Lint, Typecheck, Next.js Build
+  # --------------------------------------------------------------------------
+  frontend-ci:
+    name: Frontend CI (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Lint Frontend
+        run: npm run lint
+
+      - name: Build Next.js
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: "http://localhost:5000/api/v1"
+          NEXT_TELEMETRY_DISABLED: 1
+
+  # --------------------------------------------------------------------------
+  # 3. Container Images Build & Scan Verification
+  # --------------------------------------------------------------------------
+  docker-build:
+    name: Docker Image Build & Validation
+    needs: [backend-ci, frontend-ci]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          push: false
+          tags: poster-parlor-api:ci-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Web Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          push: false
+          tags: poster-parlor-web:ci-test
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
