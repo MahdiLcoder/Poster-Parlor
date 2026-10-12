@@ -1,0 +1,113 @@
+version: "3.8"
+
+services:
+  # ----------------------------------------------------
+  # MongoDB Database Service
+  # ----------------------------------------------------
+  mongo:
+    image: mongo:7
+    container_name: poster-parlor-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-admin123}
+      MONGO_INITDB_DATABASE: ${DB_NAME:-poster_parlor_dev}
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - poster-parlor-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ----------------------------------------------------
+  # Backend API Service (NestJS)
+  # ----------------------------------------------------
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: poster-parlor-api
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      ALLOWED_ORIGINS: http://localhost:3000
+      DB_NAME: ${DB_NAME:-poster_parlor_dev}
+      DB_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-admin123}@mongo:27017/${DB_NAME:-poster_parlor_dev}?authSource=admin
+      POOL_SIZE: 10
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: http://localhost:5000/api/v1/auth/google/callback
+      JWT_ACCESS_TOKEN_SECRET: ${JWT_ACCESS_TOKEN_SECRET}
+      JWT_ACCESS_TOKEN_EXPIRES_IN: 15m
+      JWT_REFRESH_TOKEN_SECRET: ${JWT_REFRESH_TOKEN_SECRET}
+      JWT_REFRESH_TOKEN_EXPIRES_IN: 7d
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      RAZORPAY_API_KEY: ${RAZORPAY_API_KEY}
+      RAZORPAY_API_SECRET: ${RAZORPAY_API_SECRET}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - poster-parlor-network
+
+  # ----------------------------------------------------
+  # Frontend Web Service (Next.js)
+  # ----------------------------------------------------
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:5000/api/v1
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        NEXT_PUBLIC_RAZORPAY_KEY_ID: ${RAZORPAY_API_KEY}
+    container_name: poster-parlor-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+    depends_on:
+      - api
+    networks:
+      - poster-parlor-network
+
+  # ----------------------------------------------------
+  # Optional: Mongo Express (GUI for Database Management)
+  # ----------------------------------------------------
+  mongo-express:
+    image: mongo-express:1.0.2-20-alpine3.19
+    container_name: poster-parlor-mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-admin123}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-admin123}@mongo:27017/?authSource=admin
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - poster-parlor-network
+
+volumes:
+  mongo_data:
+    driver: local
+
+networks:
+  poster-parlor-network:
+    driver: bridge
