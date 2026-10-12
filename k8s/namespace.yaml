@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: poster-parlor
+  labels:
+    app.kubernetes.io/name: poster-parlor
+    app.kubernetes.io/part-of: poster-parlor-app
+
